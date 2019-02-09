@@ -61,7 +61,7 @@ function love.load()
     if not rules then error("Game error: rules not set!") end
     if not hooks then error("Game error: hooks not set!") end
     if not hooks.startGame then error("Game error: startGame hook not created!") end
-    math.randomseed( os.time() )
+    math.randomseed(os.time())
     rosenberg.hook("startGame")
 end
 
