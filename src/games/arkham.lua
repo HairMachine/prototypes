@@ -27,7 +27,8 @@ components = {
                     observation = 2,
                     strength = 2,
                     will = 2
-                }
+                },
+                clues = 0
             },
             {
                 glyph = "@",
@@ -46,7 +47,8 @@ components = {
                     observation = 2,
                     strength = 2,
                     will = 2
-                }
+                },
+                clues = 0
             }
         }
     },
@@ -62,6 +64,30 @@ components = {
         draw = "pieces",
         pieces = {}
     },
+    encounters = {
+    	standard = {
+    		{
+    			text = "You find a strange sign daubed on a wall.",
+    			skill = "lore",
+    			unique = 0
+    		},
+    		{
+    			text = "You see something poking out from under a heavy stone.",
+    			skill = "strength",
+    			unique = 0
+    		},
+    		{
+    			text = "Something bothers you about this place, but you can't put your finger on it.",
+    			skill = "observation",
+    			unique = 0
+    		},
+    		{
+    			text = "You come across a scene of horror!",
+    			skill = "will",
+    			unique = 0
+    		}
+    	}
+	},
     items = {},
     mythosEffects = {
         {
@@ -71,7 +97,11 @@ components = {
         {
             name = "spawnMonster",
             chance = 5
-        }
+        },
+        {
+        	name = "spawnClue",
+        	chance = 15
+    	}
     },
     monsterTypes = {
         
@@ -122,7 +152,7 @@ rules = {
                         glyph = "."
                     }
                 end
-            end,
+            end
             for i = 1, 3 do
                 rules.spawnClue.action()
             end
@@ -197,7 +227,7 @@ rules = {
     buyItem = {
         constraints = function()
             local player = components.players.pieces[components.currentPlayer]
-            for k, v in components.items do
+            for k, v in ipairs(components.items) do
                 if v.x == player.x and v.y == player.y then
                     return true
                 end
@@ -219,9 +249,57 @@ rules = {
             player.sanity = player.sanity + 1
         end
     },
+    getClue = {
+    	constraints = function()
+            local player = components.players.pieces[components.currentPlayer]
+    		for k, v in ipairs(components.clues.pieces) do
+    			if v.x == player.x and v.y == player.y then
+    				return true
+    			end
+    		end
+    		return false
+    	end,
+    	action = function()
+            local player = components.players.pieces[components.currentPlayer]
+    		for k, v in ipairs(components.clues.pieces) do
+    			if v.x == player.x and v.y == player.y then
+    				local enc = components.encounters.standard[math.random(1, #components.encounters.standard)]
+    				print(enc.text)
+    				local success = helpers.skillTest(player.skills[enc.skill], 0, 5)
+    				if success then
+    					print("You have discovered a CLUE!")
+    					player.clues = player.clues + 1
+    					table.remove(components.clues.pieces, k)
+    					rules.endTurn.action()
+    					return
+    				end
+    			end
+    		end
+    	end
+	},
+	closeGate = {
+		constraints = function()
+            local player = components.players.pieces[components.currentPlayer]
+            for k, v in ipairs(components.gates.pieces) do
+        		if v.x == player.x and v.y == player.y and clues >= 5 then
+        			return true
+        		end
+            end
+            return false
+		end,
+		action = function()
+			for k, v in ipairs(components.gates.pieces) do
+        		if v.x == player.x and v.y == player.y then
+        			print("Using your accumulated knowledge, you close the gate!")
+        			table.remove(components.gates.pieces, k)
+        			player.clues = player.clues - 5
+        		end
+            end
+		end
+	},
     endTurn = {
         constraints = function()
-            return false
+            return true
         end,
         action = function()
             -- check whether we should kill players
@@ -234,6 +312,14 @@ rules = {
             end
             if #components.players.pieces <= 0 then
                 rosenberg.hook("gameOver")
+            end
+            -- check whether there are too many gates
+            if #components.gates.pieces > 5 then
+            	rosenberg.hook("gameOver")
+            end
+            -- check whether the player has won!
+            if #components.gates.pieces == 0 then
+            	rosenberg.hook("gameOver")
             end
             -- check whether we should kill monsters
             for i = #components.monsters.pieces, 1, -1 do
@@ -267,28 +353,31 @@ rules = {
             return false
         end,
         action = function()
-            local gate = components.gates.pieces[math.random(1, #components.gates.pieces)]
-            print("Spawn monster at "..gate.x..", "..gate.y)
-            table.insert(components.monsters.pieces, {
-                x = gate.x,
-                y = gate.y,
-                glyph = "M",
-                location = "city",
-                color = {1, 0, 0},
-                hp = 3,
-                strength = 2,
-                fear = 2,
-                willTest = 0,
-                strTest = 0
-            })
+            for k, gate in ipairs(components.gates.pieces) do
+            	if math.random(1, 6) >= 4 then
+            		print("Monster emerged from a gate at "..gate.x..", "..gate.y.."!")
+		            table.insert(components.monsters.pieces, {
+		                x = gate.x,
+		                y = gate.y,
+		                glyph = "M",
+		                location = "city",
+		                color = {1, 0, 0},
+		                hp = 3,
+		                strength = 2,
+		                fear = 2,
+		                willTest = 0,
+		                strTest = 0
+		            })
+            	end
+            end
         end
     },
     spawnClue = {
         constraints = function()
-            return true
+            return false
         end,
         action = function()
-            table.insert(components.gates.pieces, {
+            table.insert(components.clues.pieces, {
                 x = math.random(1, components.city.x),
                 y = math.random(1, components.city.y),
                 glyph = "?",
@@ -303,12 +392,9 @@ rules = {
         end,
         action = function()
             print("THE MYTHOS ACTS...")
-            local effect = components.mythosEffects[math.random(1, #components.mythosEffects)]
-            if effect.name == "spawnGate" then
-                rules.spawnGate.action()
-            elseif effect.name == "spawnMonster" and #components.gates.pieces > 0 then
-                rules.spawnMonster.action()
-            end
+            local effect = rosenberg.rollOnTable(components.mythosEffects)            
+            if not rules[effect.name] then error("Game error: attempted to trigger non-existent rule "..effect) end
+            rules[effect.name].action()
             for k, v in ipairs(components.players.pieces) do
                 v.actionsDoneThisTurn = 0
             end

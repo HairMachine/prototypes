@@ -1,5 +1,8 @@
 require "games/arkham"
 
+-- TODO: Create some kind of in-built system to find whether two objects are on the same space. There can be caching to make this faster if needs be (not really important I think)
+-- TODO: Message log system
+
 rosenberg = {}
 
 rosenberg.render = {
@@ -36,11 +39,29 @@ function rosenberg.hook(hook)
     end
 end
 
+function rosenberg.rollOnTable(table)
+    local tchance = 0
+    for k, v in ipairs(table) do
+        if not v.chance then error("Game error: missing chance value in table passed to rollOnTable") end
+        tchance = tchance + v.chance
+    end
+    local roll = math.random(1, tchance)
+    local tally = 0
+    for k, v in ipairs(table) do
+        tally = tally + v.chance
+        if tally >= roll then
+            return v
+        end
+    end
+    error("Rosenberg error: could not select a value from rollOnTable")
+end
+
 function love.load()
     if not components then error("Game error: components not set!") end
     if not rules then error("Game error: rules not set!") end
     if not hooks then error("Game error: hooks not set!") end
     if not hooks.startGame then error("Game error: startGame hook not created!") end
+    math.randomseed( os.time() )
     rosenberg.hook("startGame")
 end
 
