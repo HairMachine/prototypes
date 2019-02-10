@@ -2,6 +2,7 @@ require "games/arkham"
 
 -- TODO: Create some kind of in-built system to find whether two objects are on the same space. There can be caching to make this faster if needs be (not really important I think)
 -- TODO: Message log system
+-- TODO: Dynamically generated rules / verbs
 
 rosenberg = {}
 
@@ -9,14 +10,14 @@ rosenberg.render = {
     board = function(b)
         for x = 1, b.x do
             for y = 1, b.y do
-                love.graphics.print(b.grid[x][y].glyph, x * b.tileSizeX, y * b.tileSizeY)
+                love.graphics.print(b.grid[x][y].glyph, b.startX + x * b.tileSizeX, b.startY + y * b.tileSizeY)
             end
         end
     end,
     piece = function(p)
         if not p.location then error("Game error: no location set for a piece!") end
-        local x = p.x * components[p.location].tileSizeX
-        local y = p.y * components[p.location].tileSizeY
+        local x = p.x * components[p.location].tileSizeX + components[p.location].startX
+        local y = p.y * components[p.location].tileSizeY + components[p.location].startY
         if p.color then
             love.graphics.setColor(p.color[1], p.color[2], p.color[3], 1)
         end
@@ -27,12 +28,17 @@ rosenberg.render = {
         for k, v in ipairs(p.pieces) do
             rosenberg.render.piece(v)
         end
+    end,
+    textbox = function(p)
+        love.graphics.print(p.text, p.startX, p.startY)
     end
 }
 
 function rosenberg.hook(hook)
-    for k, v in ipairs(hooks[hook]) do
-        rules[v.rule].action(components)
+    if hooks[hook] then
+        for k, v in ipairs(hooks[hook]) do
+            rules[v.rule].action(components)
+        end
     end
     if hook == "gameOver" then
         love.event.quit()
@@ -97,5 +103,12 @@ function love.mousepressed(x, y, button, istouch, presses)
             end
             startY = startY + 16
         end
+    end
+end
+
+function love.keypressed(key, scancode, isrepeat)
+    if not hotkeys then return end
+    for k, v in pairs(hotkeys) do
+        if k == key and rules[v].constraints() then rules[v].action() end
     end
 end
